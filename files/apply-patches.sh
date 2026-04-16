@@ -345,51 +345,20 @@ def patch_scheme():
             patch_skip("_scheme.py")
             return
 
-        # Find a good place to insert - look for pattern near kvmd config
-        # Insert the presence option block
-        # Look for a suitable dict entry to insert after
-        # Try to find the end of the kvmd scheme options
-        insertion = '            "presence": {"enabled": Option(False, type=valid_bool)},\n'
-
-        # Look for a pattern like "hid": { or similar top-level kvmd key
-        # Insert before the closing of the kvmd dict
-        # Simple approach: find last Option(...) line in the kvmd section and insert after
-        if "valid_bool" not in content:
-            # Need to check if valid_bool is imported
-            if "from ..validators.basic import" in content:
-                if "valid_bool" not in content:
-                    content = content.replace(
-                        "from ..validators.basic import",
-                        "from ..validators.basic import valid_bool,",
-                        1
-                    )
-
-        # Find a good insertion point - after the last top-level key in the kvmd scheme
-        # Look for patterns like '"gpio":' or '"info":' at the right indent level
-        lines = content.split("\n")
-        insert_idx = None
-        brace_depth = 0
-        in_kvmd = False
-        for i, line in enumerate(lines):
-            if '"kvmd"' in line or "'kvmd'" in line:
-                in_kvmd = True
-            if in_kvmd:
-                # Find a line that has a top-level key in the kvmd dict
-                stripped = line.strip()
-                if stripped.startswith('"') and stripped.endswith('{'):
-                    insert_idx = i  # Keep updating to find last one
-
-        if insert_idx is not None:
-            lines.insert(insert_idx, insertion.rstrip())
-            content = "\n".join(lines)
+        # Insert before "ocr": block which is right after the streamer section
+        # in the main kvmd config dict. This is a stable anchor across versions.
+        anchor = '            "ocr": {'
+        insertion = '            "presence": {"enabled": Option(False, type=valid_bool)},\n\n'
+        if anchor in content:
+            content = content.replace(anchor, insertion + anchor, 1)
         else:
-            # Fallback: insert before last closing brace area
-            # Just append after the last "Option(" line
-            last_option = content.rfind("Option(")
-            if last_option > 0:
-                eol = content.find("\n", last_option)
-                if eol > 0:
-                    content = content[:eol+1] + insertion + content[eol+1:]
+            # Fallback: insert before "snapshot": block
+            anchor2 = '            "snapshot": {'
+            if anchor2 in content:
+                content = content.replace(anchor2, insertion + anchor2, 1)
+            else:
+                patch_fail("_scheme.py", "could not find anchor (ocr or snapshot block)")
+                return
 
         write_file(path, content)
         patch_ok("_scheme.py")

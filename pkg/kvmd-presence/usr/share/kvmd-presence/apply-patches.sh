@@ -280,24 +280,38 @@ def patch_hid():
             content = content.replace("_: WsSession", "ws: WsSession")
             changed = True
 
-        # Add presence.record_input(ws.token) after specific HID send calls in ws handlers.
-        # Use exact call signatures to avoid matching non-ws methods like __print_handler.
+        # Add presence.record_input(ws.token) after HID send calls, but ONLY inside
+        # methods decorated with @exposed_ws (not @exposed_http handlers which also
+        # call the same send_* methods but don't have ws in scope).
         if "presence.record_input" not in content:
-            exact_calls = [
-                "self.__hid.send_key_event(key, state, finish)",
-                "self.__hid.send_mouse_button_event(button, state)",
-                "self.__hid.send_mouse_move_event(to_x, to_y)",
-                "self.__process_ws_delta_event(event, self.__hid.send_mouse_relative_events)",
-                "self.__process_ws_delta_event(event, self.__hid.send_mouse_wheel_events)",
-                "self.__process_ws_bin_delta_request(data, self.__hid.send_mouse_relative_events)",
-                "self.__process_ws_bin_delta_request(data, self.__hid.send_mouse_wheel_events)",
-            ]
-            for call in exact_calls:
-                target = call + "\n"
-                replacement = call + "\n        presence.record_input(ws.token)\n"
-                if target in content and replacement not in content:
-                    content = content.replace(target, replacement)
+            lines = content.split("\n")
+            new_lines = []
+            in_ws_handler = False
+            for i, line in enumerate(lines):
+                stripped = line.strip()
+                # Track if we're in an @exposed_ws decorated method
+                if stripped.startswith("@exposed_ws("):
+                    in_ws_handler = True
+                elif stripped.startswith("@exposed_http(") or stripped.startswith("@exposed_"):
+                    in_ws_handler = False
+                elif stripped.startswith("def ") and not stripped.startswith("def __ws_"):
+                    # Non-ws method definition (but not a nested def)
+                    if not line.startswith("        "):  # method-level indent
+                        in_ws_handler = False
+                new_lines.append(line)
+                # Only insert record_input inside ws handler methods
+                if in_ws_handler and any(stripped.startswith(call) for call in [
+                    "self.__hid.send_key_event(",
+                    "self.__hid.send_mouse_button_event(",
+                    "self.__hid.send_mouse_move_event(",
+                    "self.__process_ws_delta_event(",
+                    "self.__process_ws_bin_delta_request(",
+                ]):
+                    indent = len(line) - len(line.lstrip())
+                    new_lines.append(" " * indent + "presence.record_input(ws.token)")
                     changed = True
+            if changed:
+                content = "\n".join(new_lines)
 
         if changed:
             write_file(path, content)
