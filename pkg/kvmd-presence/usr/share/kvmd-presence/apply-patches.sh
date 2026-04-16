@@ -280,23 +280,24 @@ def patch_hid():
             content = content.replace("_: WsSession", "ws: WsSession")
             changed = True
 
-        # Add presence.record_input(ws.token) after HID send calls in ws handlers
-        # Look for patterns like: await self.__hid.send_... and add presence call after
+        # Add presence.record_input(ws.token) after specific HID send calls in ws handlers.
+        # Use exact call signatures to avoid matching non-ws methods like __print_handler.
         if "presence.record_input" not in content:
-            lines = content.split("\n")
-            new_lines = []
-            for i, line in enumerate(lines):
-                new_lines.append(line)
-                stripped = line.strip()
-                # Match lines that send HID events in ws handlers
-                if (stripped.startswith("await self.__hid.") and
-                    ("send_" in stripped or "set_" in stripped) and
-                    "event" in lines[max(0,i-5):i+1].__repr__()):
-                    indent = len(line) - len(line.lstrip())
-                    new_lines.append(" " * indent + "presence.record_input(ws.token)")
+            exact_calls = [
+                "self.__hid.send_key_event(key, state, finish)",
+                "self.__hid.send_mouse_button_event(button, state)",
+                "self.__hid.send_mouse_move_event(to_x, to_y)",
+                "self.__process_ws_delta_event(event, self.__hid.send_mouse_relative_events)",
+                "self.__process_ws_delta_event(event, self.__hid.send_mouse_wheel_events)",
+                "self.__process_ws_bin_delta_request(data, self.__hid.send_mouse_relative_events)",
+                "self.__process_ws_bin_delta_request(data, self.__hid.send_mouse_wheel_events)",
+            ]
+            for call in exact_calls:
+                target = call + "\n"
+                replacement = call + "\n        presence.record_input(ws.token)\n"
+                if target in content and replacement not in content:
+                    content = content.replace(target, replacement)
                     changed = True
-            if changed:
-                content = "\n".join(new_lines)
 
         if changed:
             write_file(path, content)
