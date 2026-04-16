@@ -1,0 +1,10 @@
+[Trigger]
+Type = Package
+Operation = Install
+Operation = Upgrade
+Target = kvmd
+
+[Action]
+Description = Reapplying kvmd-presence patches...
+When = PostTransaction
+Exec = /usr/share/kvmd-presence/apply-patches.sh
