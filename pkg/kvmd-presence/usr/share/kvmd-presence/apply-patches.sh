@@ -213,7 +213,7 @@ def patch_server():
                 changed = True
 
         # Add __broadcast_presence and __presence_loop methods
-        if "__broadcast_presence" not in content:
+        if "async def __broadcast_presence" not in content:
             # Add before last line or at end of class
             # Find a good insertion point - before the last method or at end
             # We'll add before the class ends
