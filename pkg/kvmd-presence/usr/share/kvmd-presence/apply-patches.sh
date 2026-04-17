@@ -495,65 +495,65 @@ def patch_session_js():
         content = read_file(path)
         changed = False
 
-        # Add __updatePresenceOverlay function if missing
+        # 1) Add __updatePresenceOverlay function BEFORE __wsJsonHandler
         if "__updatePresenceOverlay" not in content:
-            # Insert before __wsJsonHandler
-            target = "__wsJsonHandler"
-            idx = content.find(target)
-            if idx > 0:
-                # Find the function/method start
-                # Go back to find the function definition line
-                line_start = content.rfind("\n", 0, idx)
-                func_code = '''
-\t__updatePresenceOverlay(data) {
-\t\tlet el = document.getElementById("presence-overlay");
-\t\tif (!el) return;
-\t\tlet show = tools.storage.getBool("presence.overlay", true);
-\t\tif (!show || !data) { el.innerHTML = ""; return; }
-\t\tlet html = "";
-\t\tfor (let user of (data.connected || [])) {
-\t\t\tlet cls = "presence-user-idle";
-\t\t\tif ((data.controllers || []).indexOf(user) >= 0) {
-\t\t\t\tcls = "presence-user-controlling";
-\t\t\t}
-\t\t\thtml += "<div class=\\"" + cls + "\\">" + user + "</div>";
-\t\t}
-\t\tel.innerHTML = html;
-\t}
-
-'''
-                content = content[:line_start] + "\n" + func_code + content[line_start:]
+            func_code = (
+                '\n\tvar __updatePresenceOverlay = function(ev) {\n'
+                '\t\tlet el = document.getElementById("presence-overlay");\n'
+                '\t\tif (!el) {\n'
+                '\t\t\tel = document.createElement("div");\n'
+                '\t\t\tel.id = "presence-overlay";\n'
+                '\t\t\tel.className = "presence-overlay";\n'
+                '\t\t\t(document.getElementById("stream-box") || document.body).appendChild(el);\n'
+                '\t\t}\n'
+                '\t\tlet sw = document.getElementById("presence-overlay-switch");\n'
+                '\t\tel.style.display = (sw && !sw.checked) ? "none" : "block";\n'
+                '\t\tlet connected = (ev.connected || []);\n'
+                '\t\tlet controllers = (ev.controllers || []);\n'
+                '\t\tlet active = (ev.active || []);\n'
+                '\t\tlet lines = [];\n'
+                '\t\tfor (let user of connected) {\n'
+                '\t\t\tif (user === "anon") continue;\n'
+                '\t\t\tlet name = user.charAt(0).toUpperCase() + user.slice(1);\n'
+                '\t\t\tif (controllers.indexOf(user) >= 0) {\n'
+                '\t\t\t\tlines.push("<span class=\\"presence-user-controlling\\">" + name + "</span> is controlling");\n'
+                '\t\t\t} else if (active.indexOf(user) < 0) {\n'
+                '\t\t\t\tlines.push("<span class=\\"presence-user-idle\\">" + name + " is watching (idle)</span>");\n'
+                '\t\t\t} else {\n'
+                '\t\t\t\tlines.push(name + " is watching");\n'
+                '\t\t\t}\n'
+                '\t\t}\n'
+                '\t\tel.innerHTML = lines.length > 0 ? lines.join("<br>") : "";\n'
+                '\t};\n\n'
+            )
+            target = '\tvar __wsJsonHandler = function(ev_type, ev) {'
+            if target in content:
+                content = content.replace(target, func_code + target, 1)
                 changed = True
 
-        # Add case "presence" in switch if missing
-        if '"presence"' not in content:
-            # Find the switch statement in wsJsonHandler
-            switch_idx = content.find("switch (", content.find("__wsJsonHandler"))
-            if switch_idx > 0:
-                # Find a case statement to insert before/after
-                # Find the default: case or last case
-                default_idx = content.find("default:", switch_idx)
-                if default_idx < 0:
-                    # Find last case
-                    last_case = content.rfind("case ", switch_idx)
-                    default_idx = last_case
-                if default_idx > 0:
-                    presence_case = '\t\t\t\tcase "presence": this.__updatePresenceOverlay(data); break;\n'
-                    content = content[:default_idx] + presence_case + content[default_idx:]
-                    changed = True
+        # 2) Add case "presence" in switch after "streamer" case
+        if 'case "presence"' not in content:
+            streamer_case = 'case "streamer": __streamer.setState(ev); break;'
+            if streamer_case in content:
+                content = content.replace(
+                    streamer_case,
+                    streamer_case + '\n\n\t\t\tcase "presence":\n\t\t\t\t__updatePresenceOverlay(ev);\n\t\t\t\tbreak;',
+                    1,
+                )
+                changed = True
 
-        # Add bindSimpleSwitch for presence toggle if missing
-        if '"presence.overlay"' not in content:
-            # Find where other bindSimpleSwitch calls are made
-            bind_idx = content.rfind("tools.feature.bindSimpleSwitch(")
-            if bind_idx < 0:
-                bind_idx = content.rfind("bindSimpleSwitch(")
-            if bind_idx > 0:
-                eol = content.find("\n", bind_idx)
-                if eol > 0:
-                    bind_code = '\n\t\ttools.feature.bindSimpleSwitch($("presence-overlay-switch"), "presence.overlay", true);'
-                    content = content[:eol] + bind_code + content[eol:]
-                    changed = True
+        # 3) Add toggle binding in __init__
+        if "presence-overlay-switch" not in content:
+            init_target = '\t\t__streamer.ensureDeps'
+            if init_target in content:
+                bind_code = (
+                    '\t\ttools.storage.bindSimpleSwitch($("presence-overlay-switch"), "presence.overlay.visible", true, function() {\n'
+                    '\t\t\tlet el = document.getElementById("presence-overlay");\n'
+                    '\t\t\tif (el) el.style.display = $("presence-overlay-switch").checked ? "block" : "none";\n'
+                    '\t\t});\n'
+                )
+                content = content.replace(init_target, bind_code + init_target, 1)
+                changed = True
 
         if changed:
             write_file(path, content)
