@@ -166,40 +166,51 @@ def patch_server():
                     content = content[:first_self] + presence_vars + content[first_self:]
                     changed = True
 
-        # Add presence hooks in _on_ws_added
+        # Add presence hooks in _on_ws_added and _on_ws_removed
+        # Use exact string replacement on the known method body
         if "presence.set_user" not in content:
-            ws_added = content.find("async def _on_ws_added(")
-            if ws_added >= 0:
-                # Find the end of the method (next method or end)
-                # Insert before the end of the method body
-                # Look for the return or last statement
-                next_def = content.find("\n    async def ", ws_added + 1)
-                if next_def < 0:
-                    next_def = content.find("\n    def ", ws_added + 1)
-                if next_def > 0:
-                    insert_code = (
-                        "\n        if self.__presence_enabled:\n"
-                        "            presence.set_user(ws.token, ws.user)\n"
-                        "            if self.__presence_loop_task is None:\n"
-                        "                self.__presence_loop_task = asyncio.ensure_future(self.__presence_loop())\n"
-                    )
-                    content = content[:next_def] + insert_code + content[next_def:]
-                    changed = True
+            old_added = (
+                "    def _on_ws_added(self, ws: WsSession) -> None:\n"
+                "        self.__auth.start_ws_session(ws.token)\n"
+                "        self.__hid.clear_events()\n"
+                "        self.__streamer_notifier.notify()\n"
+            )
+            new_added = (
+                "    def _on_ws_added(self, ws: WsSession) -> None:\n"
+                "        self.__auth.start_ws_session(ws.token)\n"
+                "        self.__hid.clear_events()\n"
+                "        self.__streamer_notifier.notify()\n"
+                "        if self.__presence_enabled:\n"
+                "            user = self.__auth.check(ws.token)\n"
+                "            if user:\n"
+                "                presence.set_user(ws.token, user)\n"
+                "            if self.__presence_loop_task is None:\n"
+                "                self.__presence_loop_task = asyncio.ensure_future(self.__presence_loop())\n"
+                "            asyncio.ensure_future(self.__broadcast_presence())\n"
+            )
+            if old_added in content:
+                content = content.replace(old_added, new_added, 1)
+                changed = True
 
-        # Add presence hooks in _on_ws_removed
         if "presence.unset_user" not in content:
-            ws_removed = content.find("async def _on_ws_removed(")
-            if ws_removed >= 0:
-                next_def = content.find("\n    async def ", ws_removed + 1)
-                if next_def < 0:
-                    next_def = content.find("\n    def ", ws_removed + 1)
-                if next_def > 0:
-                    insert_code = (
-                        "\n        if self.__presence_enabled:\n"
-                        "            presence.unset_user(ws.token)\n"
-                    )
-                    content = content[:next_def] + insert_code + content[next_def:]
-                    changed = True
+            old_removed = (
+                "    def _on_ws_removed(self, ws: WsSession) -> None:\n"
+                "        self.__auth.stop_ws_session(ws.token)\n"
+                "        self.__hid.clear_events()\n"
+                "        self.__streamer_notifier.notify()\n"
+            )
+            new_removed = (
+                "    def _on_ws_removed(self, ws: WsSession) -> None:\n"
+                "        self.__auth.stop_ws_session(ws.token)\n"
+                "        self.__hid.clear_events()\n"
+                "        self.__streamer_notifier.notify()\n"
+                "        if self.__presence_enabled:\n"
+                "            presence.unset_user(ws.token)\n"
+                "            asyncio.ensure_future(self.__broadcast_presence())\n"
+            )
+            if old_removed in content:
+                content = content.replace(old_removed, new_removed, 1)
+                changed = True
 
         # Add __broadcast_presence and __presence_loop methods
         if "__broadcast_presence" not in content:

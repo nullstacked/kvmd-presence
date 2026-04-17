@@ -6,9 +6,9 @@ xdata = pkgtype=pkg
 pkgver = 1.0.0-1
 pkgdesc = User presence overlay for PiKVM - shows who is watching/controlling
 url = https://github.com/nullstacked/kvmd-plugins
-builddate = 1776384217
+builddate = 1776384545
 packager = Unknown Packager
-size = 31446
+size = 31582
 arch = any
 license = GPL3
 depend = kvmd

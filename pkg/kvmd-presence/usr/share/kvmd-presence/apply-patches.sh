@@ -432,32 +432,28 @@ def patch_index_html():
 
         # Add presence toggle checkbox row if missing
         if "presence-overlay-switch" not in content:
-            # Find a suitable place in the settings/controls area
-            # Look for another switch row and add after it
-            # Try to find the about section or settings area
-            target = 'id="stream-audio-switch"'
-            if target not in content:
-                target = 'id="hid-keyboard-switch"'
-            if target not in content:
-                target = 'class="feature-checkbox"'
-
-            if target in content:
-                idx = content.find(target)
-                # Find the end of this row (closing tr or div)
-                eol = content.find("\n", idx)
-                # Find the closing tag of this row
-                row_end = content.find("</tr>", idx)
-                if row_end < 0:
-                    row_end = content.find("</div>", idx)
-                if row_end > 0:
-                    row_end = content.find("\n", row_end)
+            # Insert after "Suspend stream when tab is not active" toggle row
+            # which is the last row in "Web UI settings" section
+            anchor = 'id="stream-suspend-switch"'
+            if anchor in content:
+                # Find the closing </tr> after the anchor
+                idx = content.find(anchor)
+                tr_end = content.find("</tr>", idx)
+                if tr_end > 0:
+                    insert_at = content.find("\n", tr_end)
                     toggle_html = (
-                        '\n\t\t\t\t\t\t<tr>'
-                        '\n\t\t\t\t\t\t\t<td>Presence overlay:</td>'
-                        '\n\t\t\t\t\t\t\t<td><input type="checkbox" id="presence-overlay-switch" checked /></td>'
-                        '\n\t\t\t\t\t\t</tr>'
+                        '\n                    <tr>\n'
+                        '                          <td>Show who is watching/controlling:\n'
+                        '                          </td>\n'
+                        '                          <td align="right">\n'
+                        '                            <div class="switch-box">\n'
+                        '                              <input checked type="checkbox" id="presence-overlay-switch">\n'
+                        '                              <label for="presence-overlay-switch"><span class="switch-inner"></span><span class="switch"></span></label>\n'
+                        '                            </div>\n'
+                        '                          </td>\n'
+                        '                    </tr>'
                     )
-                    content = content[:row_end] + toggle_html + content[row_end:]
+                    content = content[:insert_at] + toggle_html + content[insert_at:]
                     changed = True
 
         # Add presence overlay div if missing
