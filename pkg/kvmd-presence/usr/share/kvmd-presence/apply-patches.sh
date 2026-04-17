@@ -142,16 +142,11 @@ def patch_server():
 
         # Add presence_enabled param to KvmdServer.__init__
         if "presence_enabled" not in content:
-            # Find __init__ signature and add param
-            # Look for the closing paren of __init__
-            init_match = re.search(
-                r'(class KvmdServer.*?def __init__\(self.*?)(,?\s*\) -> None:)',
-                content, re.DOTALL
-            )
-            if init_match:
-                content = content[:init_match.end(1)] + \
-                    ",\n        presence_enabled: bool=False" + \
-                    content[init_match.start(2):]
+            # Insert after 'stream_forever: bool,' which is the last param
+            target = "stream_forever: bool,\n"
+            replacement = "stream_forever: bool,\n        presence_enabled: bool=False,\n"
+            if target in content:
+                content = content.replace(target, replacement, 1)
                 changed = True
 
         # Add instance variables after __init__ body start
