@@ -86,21 +86,25 @@ systemctl restart kvmd
 ro
 ```
 
-## Customization
+## Customization (optional)
 
-All styling uses CSS custom properties. Override in `/etc/kvmd/web.css` or your own stylesheet:
+The overlay works out of the box with sensible defaults — no configuration needed.
+
+If you want to change colors, size, or position, the plugin uses CSS custom properties that you can override in `/etc/kvmd/web.css` (this file persists across kvmd updates):
 
 ```css
 :root {
-    --cs-presence-fg: #fff;
-    --cs-presence-controlling-fg: #4caf50;
-    --cs-presence-idle-opacity: 0.5;
+    --cs-presence-fg: #fff;                /* text color */
+    --cs-presence-controlling-fg: #4caf50; /* "is controlling" highlight */
+    --cs-presence-idle-opacity: 0.5;       /* idle user dimming */
     --cs-presence-font-size: 12px;
-    --cs-presence-top: 6px;
-    --cs-presence-left: 6px;
+    --cs-presence-top: 6px;                /* position from top */
+    --cs-presence-left: 6px;               /* position from left */
     --cs-presence-shadow: 1px 1px 2px rgba(0,0,0,0.8), -1px -1px 2px rgba(0,0,0,0.8);
 }
 ```
+
+Only include the properties you want to change. Defaults are provided by the plugin's own stylesheet (`presence.css`).
 
 ## Performance
 
