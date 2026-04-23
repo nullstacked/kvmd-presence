@@ -184,6 +184,8 @@ def patch_server():
                 "            user = self.__auth.check(ws.token)\n"
                 "            if user:\n"
                 "                presence.set_user(ws.token, user)\n"
+                "            if ws.kwargs.get(\"stream\"):\n"
+                "                presence.set_stream(ws.token)\n"
                 "            if self.__presence_loop_task is None:\n"
                 "                self.__presence_loop_task = asyncio.ensure_future(self.__presence_loop())\n"
                 "            asyncio.ensure_future(self.__broadcast_presence())\n"
@@ -205,6 +207,8 @@ def patch_server():
                 "        self.__hid.clear_events()\n"
                 "        self.__streamer_notifier.notify()\n"
                 "        if self.__presence_enabled:\n"
+                "            if ws.kwargs.get(\"stream\"):\n"
+                "                presence.unset_stream(ws.token)\n"
                 "            presence.unset_user(ws.token)\n"
                 "            asyncio.ensure_future(self.__broadcast_presence())\n"
             )
@@ -223,6 +227,7 @@ def patch_server():
             "connected": presence.get_connected_users(),
             "controllers": presence.get_controllers(),
             "active": presence.get_active(),
+            "streaming": presence.get_streaming(),
         }
         if state != self.__prev_presence_state:
             self.__prev_presence_state = state
@@ -454,7 +459,7 @@ def patch_index_html():
                     insert_at = content.find("\n", tr_end)
                     toggle_html = (
                         '\n                    <tr>\n'
-                        '                          <td>Show who is watching/controlling:\n'
+                        '                          <td>Show who is connected/controlling:\n'
                         '                          </td>\n'
                         '                          <td align="right">\n'
                         '                            <div class="switch-box">\n'
@@ -518,16 +523,19 @@ def patch_session_js():
                 '\t\tlet connected = (ev.connected || []);\n'
                 '\t\tlet controllers = (ev.controllers || []);\n'
                 '\t\tlet active = (ev.active || []);\n'
+                '\t\tlet streaming = (ev.streaming || []);\n'
                 '\t\tlet lines = [];\n'
                 '\t\tfor (let user of connected) {\n'
                 '\t\t\tif (user === "anon") continue;\n'
                 '\t\t\tlet name = user.charAt(0).toUpperCase() + user.slice(1);\n'
                 '\t\t\tif (controllers.indexOf(user) >= 0) {\n'
                 '\t\t\t\tlines.push("<span class=\\"presence-user-controlling\\">" + name + "</span> is controlling");\n'
+                '\t\t\t} else if (streaming.indexOf(user) < 0) {\n'
+                '\t\t\t\tlines.push("<span class=\\"presence-user-idle\\">" + name + " is away</span>");\n'
                 '\t\t\t} else if (active.indexOf(user) < 0) {\n'
-                '\t\t\t\tlines.push("<span class=\\"presence-user-idle\\">" + name + " is watching (idle)</span>");\n'
+                '\t\t\t\tlines.push("<span class=\\"presence-user-idle\\">" + name + " is connected (idle)</span>");\n'
                 '\t\t\t} else {\n'
-                '\t\t\t\tlines.push(name + " is watching");\n'
+                '\t\t\t\tlines.push(name + " is connected");\n'
                 '\t\t\t}\n'
                 '\t\t}\n'
                 '\t\tel.innerHTML = lines.length > 0 ? lines.join("<br>") : "";\n'

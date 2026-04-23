@@ -60,6 +60,9 @@ _last_input: dict[str, float] = {}
 # username -> last record_input monotonic timestamp (for rate-limiting)
 _last_record_ts: dict[str, float] = {}
 
+# tokens with an active streaming WS (stream=True session)
+_stream_tokens: set[str] = set()
+
 _RATE_LIMIT_INTERVAL = 0.25  # seconds
 _PRUNE_AGE = 3600.0  # 1 hour
 
@@ -73,12 +76,29 @@ def set_user(token: str, user: str) -> None:
 
 def unset_user(token: str) -> None:
     user = _users.pop(token, None)
+    _stream_tokens.discard(token)
     if user:
         get_logger(0).info("Presence: user %r disconnected (token=%s...)", user, token[:8])
         # Clean up input tracking if no other sessions for this user
         if user not in _users.values():
             _last_input.pop(user, None)
             _last_record_ts.pop(user, None)
+
+
+def set_stream(token: str) -> None:
+    _stream_tokens.add(token)
+
+
+def unset_stream(token: str) -> None:
+    _stream_tokens.discard(token)
+
+
+def get_streaming() -> list[str]:
+    """Users with at least one active streaming WS session."""
+    return sorted({
+        _users[token] for token in _stream_tokens
+        if token in _users
+    })
 
 
 def record_input(token: str) -> None:
